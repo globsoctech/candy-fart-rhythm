@@ -2,6 +2,57 @@ import * as Tone from 'tone';
 import { Midi } from '@tonejs/midi';
 
 export const LANE_COUNT = 14;
+export const GAME_BPM = 96;
+export const BEAT_SEC = 60 / GAME_BPM;
+
+export function simplifyNotesForGameplay(rawNotes, options = {}) {
+    const {
+        bpm = GAME_BPM,
+        minGapBeats = 1,
+        subdivision = 2,
+        maxNotes = 55
+    } = options;
+
+    const beatSec = 60 / bpm;
+    const grid = beatSec / subdivision;
+    const minGap = minGapBeats * beatSec;
+
+    const sorted = [...rawNotes].sort((a, b) => a.time - b.time);
+    const thinned = [];
+    let lastKept = -Infinity;
+
+    for (const note of sorted) {
+        const time = Math.round(note.time / grid) * grid;
+        if (time - lastKept < minGap - 1e-6) continue;
+
+        thinned.push({
+            ...note,
+            time,
+            duration: Math.max(note.duration || beatSec * 0.75, grid)
+        });
+        lastKept = time;
+        if (thinned.length >= maxNotes) break;
+    }
+
+    return thinned;
+}
+
+function pickMelodyTrack(midiData) {
+    let bestTrack = null;
+    let bestScore = -1;
+
+    for (const track of midiData.tracks) {
+        if (!track.notes.length) continue;
+        const melodic = track.notes.filter(n => n.midi >= 55 && n.midi <= 84).length;
+        const score = melodic * 3 + track.notes.length;
+        if (score > bestScore) {
+            bestScore = score;
+            bestTrack = track;
+        }
+    }
+
+    return bestTrack || midiData.tracks.find(t => t.notes.length) || midiData.tracks[0];
+}
 
 export class RhythmEngine {
     constructor() {
@@ -14,6 +65,7 @@ export class RhythmEngine {
         this.synth = null;
         this.panner = null;
         this.songVolume = 0.75;
+        this.bpm = GAME_BPM;
     }
 
     setSongVolume(volume) {
@@ -53,8 +105,15 @@ export class RhythmEngine {
     }
 
     loadGeneratedSong(songData) {
-        this.notes = this.assignLanes(songData.notes).sort((a, b) => a.time - b.time);
-        this.midiData = { duration: songData.duration };
+        this.bpm = songData.bpm || GAME_BPM;
+        const simplified = simplifyNotesForGameplay(songData.notes, {
+            bpm: this.bpm,
+            minGapBeats: 1,
+            maxNotes: 55
+        });
+        this.notes = this.assignLanes(simplified).sort((a, b) => a.time - b.time);
+        const last = this.notes[this.notes.length - 1];
+        this.midiData = { duration: last ? last.time + 2.5 : songData.duration };
         return this.notes;
     }
 
@@ -72,23 +131,27 @@ export class RhythmEngine {
 
     async loadMidiFromArrayBuffer(arrayBuffer) {
         this.midiData = new Midi(arrayBuffer);
+        this.bpm = this.midiData.header.tempos[0]?.bpm || GAME_BPM;
 
-        const allNotes = [];
-        this.midiData.tracks.forEach(track => {
-            track.notes.forEach(note => {
-                if (note.velocity <= 0) return;
-                allNotes.push({
-                    time: note.time,
-                    duration: note.duration,
-                    name: note.name,
-                    midi: note.midi,
-                    velocity: note.velocity,
-                    hit: false
-                });
-            });
+        const melodyTrack = pickMelodyTrack(this.midiData);
+        const rawNotes = (melodyTrack?.notes || []).flatMap(note => {
+            if (note.velocity <= 0) return [];
+            return [{
+                time: note.time,
+                duration: note.duration,
+                name: note.name,
+                midi: note.midi,
+                velocity: note.velocity,
+                hit: false
+            }];
         });
 
-        this.notes = this.assignLanes(allNotes).sort((a, b) => a.time - b.time);
+        const simplified = simplifyNotesForGameplay(rawNotes, {
+            bpm: this.bpm,
+            minGapBeats: 1,
+            maxNotes: 60
+        });
+        this.notes = this.assignLanes(simplified).sort((a, b) => a.time - b.time);
 
         if (!this.midiData.duration && this.notes.length) {
             const last = this.notes[this.notes.length - 1];
@@ -157,7 +220,7 @@ export class RhythmEngine {
         );
     }
 
-    checkHit(currentTime, windowSeconds = 0.15) {
+    checkHit(currentTime, windowSeconds = 0.2) {
         if (!this.isPlaying) return null;
 
         const elapsedTime = (currentTime - this.startTime) / 1000;

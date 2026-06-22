@@ -1,5 +1,5 @@
 import * as Tone from 'tone';
-import { RhythmEngine } from './RhythmEngine.js';
+import { RhythmEngine, BEAT_SEC } from './RhythmEngine.js';
 import { MultiplayerManager } from './MultiplayerManager.js';
 import { CLASSICAL_SONGS, generateSongNotes } from './ClassicalSongs.js';
 
@@ -7,7 +7,7 @@ const DESIGN_WIDTH = 1920;
 const DESIGN_HEIGHT = 1080;
 
 // Jedna ścieżka rytmu — nuty spadają pionowo środkiem ekranu
-const NOTE_LOOKAHEAD = 2.8;
+const NOTE_LOOKAHEAD = BEAT_SEC * 4;
 const KEYBOARD_H = 150;
 const KEYBOARD_Y = DESIGN_HEIGHT - KEYBOARD_H - 20;
 const HIT_LINE_Y = KEYBOARD_Y - 8;
@@ -732,6 +732,27 @@ class Game {
         grd.addColorStop(1, 'rgba(255,105,180,0.25)');
         ctx.fillStyle = grd;
         ctx.fillRect(x + 4, NOTE_TOP_Y, TRACK_W - 8, HIT_LINE_Y - NOTE_TOP_Y);
+
+        const bpm = this.engine.bpm || 96;
+        const beatSec = 60 / bpm;
+        const fallDist = HIT_LINE_Y - NOTE_TOP_Y;
+        const pxPerSec = fallDist / NOTE_LOOKAHEAD;
+        const beatPx = beatSec * pxPerSec;
+        if (this.state === 'PLAYING' && beatPx > 8) {
+            const elapsed = this.engine.isPlaying
+                ? (performance.now() - this.engine.startTime) / 1000
+                : 0;
+            const phase = (elapsed % beatSec) / beatSec;
+            const offset = phase * beatPx;
+            ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+            ctx.lineWidth = 1;
+            for (let y = HIT_LINE_Y - offset; y >= NOTE_TOP_Y; y -= beatPx) {
+                ctx.beginPath();
+                ctx.moveTo(x + 6, y);
+                ctx.lineTo(x + TRACK_W - 6, y);
+                ctx.stroke();
+            }
+        }
 
         ctx.strokeStyle = 'rgba(0,255,255,0.85)';
         ctx.lineWidth = 4;

@@ -1,5 +1,7 @@
+import { BEAT_SEC, GAME_BPM } from './RhythmEngine.js';
+
 // Built-in classical melodies encoded as note sequences.
-const QN = 0.5; // Quarter note duration in seconds (120 BPM)
+const QN = BEAT_SEC;
 
 const N = {
     C3: 48, D3: 50, Eb3: 51, E3: 52, F3: 53, G3: 55, A3: 57, Bb3: 58, B3: 59,
@@ -114,16 +116,18 @@ function getComposer(title) {
 
 export function generateSongNotes(title) {
     const melody = MELODIES[title];
-    if (!melody) return { notes: [], duration: 0 };
+    if (!melody) return { notes: [], duration: 0, bpm: GAME_BPM };
 
     const notes = [];
     let time = 0;
-    const targetDuration = 45;
+    const minDuration = 24;
+    const maxDuration = 32;
+    let loops = 0;
 
-    while (time < targetDuration) {
+    while (time < minDuration && loops < 2) {
         for (const [pitch, beats] of melody) {
             const dur = beats * QN;
-            if (pitch !== -1) {
+            if (pitch !== -1 && time < maxDuration) {
                 notes.push({
                     time,
                     duration: dur,
@@ -134,11 +138,15 @@ export function generateSongNotes(title) {
                 });
             }
             time += dur;
-            if (time >= targetDuration) break;
+            if (time >= maxDuration) break;
         }
+        loops++;
     }
 
-    return { notes, duration: time + 1, title };
+    const trimmed = notes.filter(n => n.time < maxDuration);
+    const end = trimmed.length ? trimmed[trimmed.length - 1].time + 2 : 0;
+
+    return { notes: trimmed, duration: end, title, bpm: GAME_BPM };
 }
 
 function midiToName(midi) {
