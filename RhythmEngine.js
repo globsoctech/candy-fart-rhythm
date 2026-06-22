@@ -178,8 +178,6 @@ export class RhythmEngine {
         const elapsedTime = (currentTime - this.startTime) / 1000;
         const totalDuration = this.midiData.duration;
 
-        this.playDueNotes(elapsedTime);
-
         if (this.onProgress) {
             this.onProgress(Math.min(1, elapsedTime / totalDuration));
         }
@@ -192,22 +190,8 @@ export class RhythmEngine {
         return elapsedTime;
     }
 
-    playDueNotes(elapsedTime) {
-        if (!this.synth || this.songVolume <= 0) return;
-
-        for (const note of this.notes) {
-            if (note._played || elapsedTime < note.time) continue;
-            note._played = true;
-
-            this.panner.pan.value = 0;
-
-            const pitch = note.name || 'C4';
-            const raw = note.velocity != null ? note.velocity : 0.7;
-            const baseVel = raw > 1 ? raw / 127 : raw;
-            const vel = Math.min(1, baseVel * this.songVolume);
-            this.synth.triggerAttackRelease(pitch, Math.min(note.duration || 0.3, 0.45), undefined, vel);
-            this.panner.pan.rampTo(0, 0.25);
-        }
+    playDueNotes() {
+        // Melodia wyłączona — rytm tylko wizualny + pierdy przy trafieniu.
     }
 
     getUpcomingNotes(currentTime, lookaheadSeconds = 2) {
