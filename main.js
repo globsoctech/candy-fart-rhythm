@@ -20,7 +20,7 @@ class Game {
     constructor() {
         this.canvas = document.createElement('canvas');
         this.ctx = this.canvas.getContext('2d');
-        document.getElementById('game-container').appendChild(this.canvas);
+        document.getElementById('game-stage').prepend(this.canvas);
 
         this.engine = new RhythmEngine();
         this.multiplayer = new MultiplayerManager();
@@ -50,6 +50,7 @@ class Game {
         this.masterGain = null;
 
         window.addEventListener('resize', () => this.resize());
+        window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 100));
         this.resize();
         this.init();
     }
@@ -590,16 +591,19 @@ class Game {
     }
 
     resize() {
-        const scale = Math.min(window.innerWidth / DESIGN_WIDTH, window.innerHeight / DESIGN_HEIGHT);
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const scale = Math.min(vw / DESIGN_WIDTH, vh / DESIGN_HEIGHT);
+
         this.canvas.width = DESIGN_WIDTH;
         this.canvas.height = DESIGN_HEIGHT;
-        this.canvas.style.width = `${DESIGN_WIDTH * scale}px`;
-        this.canvas.style.height = `${DESIGN_HEIGHT * scale}px`;
-        this.canvas.style.position = 'absolute';
-        this.canvas.style.left = '50%';
-        this.canvas.style.top = '50%';
-        this.canvas.style.transform = 'translate(-50%, -50%)';
-        this.canvas.style.zIndex = '1';
+
+        const stage = document.getElementById('game-stage');
+        if (stage) {
+            stage.style.width = `${DESIGN_WIDTH}px`;
+            stage.style.height = `${DESIGN_HEIGHT}px`;
+            stage.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        }
     }
 
     loop(t) {

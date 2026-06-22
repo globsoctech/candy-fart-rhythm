@@ -64,6 +64,7 @@ export class RhythmEngine {
         this.onComplete = null;
         this.synth = null;
         this.panner = null;
+        this.musicFilter = null;
         this.songVolume = 0.75;
         this.bpm = GAME_BPM;
     }
@@ -80,10 +81,18 @@ export class RhythmEngine {
         if (this.synth) return;
         await Tone.start();
         this.panner = new Tone.Panner(0);
+        this.musicFilter = new Tone.Filter({
+            type: 'lowpass',
+            frequency: 1600,
+            rolloff: -24,
+            Q: 0.6
+        });
         this.synth = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: 'triangle' },
-            envelope: { attack: 0.02, decay: 0.12, sustain: 0.25, release: 0.35 }
-        }).connect(this.panner);
+            oscillator: { type: 'sine' },
+            envelope: { attack: 0.06, decay: 0.28, sustain: 0.35, release: 0.55 },
+            volume: -8
+        }).connect(this.musicFilter);
+        this.musicFilter.connect(this.panner);
         this.setSongVolume(this.songVolume);
     }
 
@@ -178,6 +187,8 @@ export class RhythmEngine {
         const elapsedTime = (currentTime - this.startTime) / 1000;
         const totalDuration = this.midiData.duration;
 
+        this.playDueNotes(elapsedTime);
+
         if (this.onProgress) {
             this.onProgress(Math.min(1, elapsedTime / totalDuration));
         }
@@ -190,8 +201,24 @@ export class RhythmEngine {
         return elapsedTime;
     }
 
-    playDueNotes() {
-        // Melodia wyłączona — rytm tylko wizualny + pierdy przy trafieniu.
+    playDueNotes(elapsedTime) {
+        if (!this.synth || this.songVolume <= 0) return;
+
+        for (const note of this.notes) {
+            if (note._played || elapsedTime < note.time) continue;
+            note._played = true;
+
+            const pitch = note.name || 'C4';
+            const raw = note.velocity != null ? note.velocity : 0.7;
+            const baseVel = raw > 1 ? raw / 127 : raw;
+            const vel = Math.min(0.55, baseVel * this.songVolume * 0.7);
+            this.synth.triggerAttackRelease(
+                pitch,
+                Math.min(note.duration || 0.3, 0.32),
+                undefined,
+                vel
+            );
+        }
     }
 
     getUpcomingNotes(currentTime, lookaheadSeconds = 2) {

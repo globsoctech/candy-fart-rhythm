@@ -18,8 +18,36 @@
     </script>
     <style>
       html, body, #game-container { width: 100%; height: 100%; margin: 0; padding: 0; background: #050505; overflow: hidden; }
-      body { touch-action: none; font-family: Inter, system-ui, sans-serif; }
-      canvas { display: block; }
+      body {
+        touch-action: none;
+        font-family: Inter, system-ui, sans-serif;
+        -webkit-text-size-adjust: 100%;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        box-sizing: border-box;
+      }
+      #game-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+      }
+      #game-stage {
+        position: absolute;
+        width: 1920px;
+        height: 1080px;
+        left: 50%;
+        top: 50%;
+        transform-origin: center center;
+        will-change: transform;
+      }
+      canvas {
+        display: block;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+      }
 
       #ui-layer {
         font-family: 'Inter', sans-serif;
@@ -47,6 +75,19 @@
 
       @media (max-width: 980px) {
         .lobby-grid { grid-template-columns: 1fr; max-width: 420px; }
+        #lobby-screen h1 { font-size: 2rem !important; }
+        #start-game { font-size: 1.25rem !important; padding: 14px 36px !important; }
+      }
+
+      @media (max-width: 600px) {
+        #lobby-screen { padding: 16px 12px !important; }
+        #lobby-screen h1 { font-size: 1.6rem !important; letter-spacing: 0.02em; }
+        .lobby-card { padding: 14px; }
+        .card-title { font-size: 0.95rem; }
+        #room-code { font-size: 1.5rem !important; letter-spacing: 4px !important; }
+        #accuracy-text { font-size: 2.5rem !important; }
+        #score, #combo { font-size: 1.5rem !important; }
+        #volume-hud { min-width: 140px !important; padding: 8px 12px !important; }
       }
 
       .settings-card input[type="range"] {
@@ -87,7 +128,8 @@
   </head>
   <body>
     <div id="game-container">
-      <div id="ui-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; color: white; z-index: 10;">
+      <div id="game-stage">
+      <div id="ui-layer" style="position: absolute; inset: 0; pointer-events: none; color: white; z-index: 10;">
         <div id="lobby-screen" style="pointer-events: auto; position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; background: rgba(10,2,15,0.9); overflow-y: auto; padding: 30px 20px; box-sizing: border-box;">
           <h1 style="font-family: Orbitron; font-size: 2.6rem; margin: 0 0 20px; color: #ff69b4; text-align: center; text-shadow: 0 0 18px rgba(255,105,180,0.6);">Fart Music Master</h1>
 
@@ -165,7 +207,7 @@
 
           <button id="start-game" style="margin-top: 24px; background: #00ffff; color: #000; padding: 16px 50px; border: none; border-radius: 30px; font-size: 1.6rem; font-weight: bold; cursor: pointer; font-family: Orbitron; border: 4px solid white; box-shadow: 0 0 24px rgba(0,255,255,0.5);">START PARTY</button>
           <p id="error-message" style="color: #ff4444; margin-top: 10px; font-weight: bold; display: none;">Please select a song first!</p>
-          <p style="margin-top: 12px; font-size: 0.85rem; opacity: 0.6;">Controls: <strong>SPACE</strong> to fart on beat</p>
+          <p style="margin-top: 12px; font-size: 0.85rem; opacity: 0.6;">Sterowanie: <strong>SPACJA</strong> lub dotyk na ekranie</p>
         </div>
 
         <div id="hud" style="display: none; padding: 20px; width: 100%; height: 100%; box-sizing: border-box; flex-direction: column; justify-content: space-between;">
@@ -199,6 +241,7 @@
             <div id="progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff69b4, #00ffff);"></div>
           </div>
         </div>
+      </div>
       </div>
     </div>
     <script type="module" src="main.js"></script>
