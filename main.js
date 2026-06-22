@@ -1,5 +1,5 @@
 import * as Tone from 'tone';
-import { RhythmEngine, BEAT_SEC } from './RhythmEngine.js';
+import { RhythmEngine, BEAT_SEC, MAX_SFX_SEC } from './RhythmEngine.js';
 import { MultiplayerManager } from './MultiplayerManager.js';
 import { CLASSICAL_SONGS, generateSongNotes } from './ClassicalSongs.js';
 
@@ -51,6 +51,7 @@ class Game {
 
         window.addEventListener('resize', () => this.resize());
         window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 100));
+        window.visualViewport?.addEventListener('resize', () => this.resize());
         this.resize();
         this.init();
     }
@@ -154,7 +155,7 @@ class Game {
 
         let fartPaths = [];
         try {
-            const res = await fetch('assets/audio/farts/manifest.json?v=1');
+            const res = await fetch('assets/audio/farts/manifest.json?v=2');
             if (res.ok) fartPaths = await res.json();
         } catch { /* ignore */ }
 
@@ -173,8 +174,19 @@ class Game {
         }
 
         await Tone.loaded().catch(() => {});
-        this.fartPool = this.fartPool.filter(e => e.player?.loaded);
+        this.fartPool = this.fartPool.filter(e => {
+            const dur = e.player?.buffer?.duration ?? 0;
+            return dur > 0 && dur <= MAX_SFX_SEC + 0.05;
+        });
         this.applyVolumes();
+    }
+
+    playFartPlayer(player) {
+        if (!player?.loaded) return false;
+        player.stop();
+        const dur = Math.min(MAX_SFX_SEC, player.buffer.duration);
+        player.start(0, undefined, dur);
+        return true;
     }
 
     applyVolumes() {
@@ -397,6 +409,7 @@ class Game {
             }
         if (errorEl) errorEl.style.display = 'none';
         await Tone.start();
+        await Tone.getContext().resume();
         await this.engine.initAudio();
         this.engine.connectTo(this.masterGain);
         if (this.engine.notes.length) {
@@ -479,8 +492,7 @@ class Game {
             return -1;
         }
         const entry = this.fartPool[Math.floor(Math.random() * this.fartPool.length)];
-        if (entry.player?.loaded) {
-            entry.player.start();
+        if (this.playFartPlayer(entry?.player)) {
             return entry.id;
         }
         this.playProceduralFart(Math.random());
@@ -489,27 +501,27 @@ class Game {
 
     playFartByIndex(index) {
         const entry = this.fartPool[index];
-        if (entry?.player?.loaded) {
-            entry.player.start();
+        if (this.playFartPlayer(entry?.player)) {
             return;
         }
         this.playProceduralFart(Math.random());
     }
 
     playProceduralFart(seed = 0) {
+        const dur = 0.45;
         const ac = new (window.AudioContext || window.webkitAudioContext)();
         const osc = ac.createOscillator();
         const gain = ac.createGain();
-        const base = 65 + Math.floor((typeof seed === 'number' ? seed : Math.random()) * 70);
-        osc.type = 'sawtooth';
+        const base = 55 + Math.floor((typeof seed === 'number' ? seed : Math.random()) * 40);
+        osc.type = 'sine';
         osc.frequency.setValueAtTime(base, ac.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(base * 0.4, ac.currentTime + 0.25);
-        gain.gain.setValueAtTime(0.4 * this.sfxVolume, ac.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ac.currentTime + 0.35);
+        osc.frequency.exponentialRampToValueAtTime(base * 0.55, ac.currentTime + dur * 0.7);
+        gain.gain.setValueAtTime(0.35 * this.sfxVolume * this.masterVolume, ac.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ac.currentTime + dur);
         osc.connect(gain);
         gain.connect(ac.destination);
         osc.start();
-        osc.stop(ac.currentTime + 0.4);
+        osc.stop(ac.currentTime + dur);
     }
 
     handleInput() {
@@ -591,9 +603,9 @@ class Game {
     }
 
     resize() {
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        const scale = Math.min(vw / DESIGN_WIDTH, vh / DESIGN_HEIGHT);
+        const vw = window.visualViewport?.width ?? window.innerWidth;
+        const vh = window.visualViewport?.height ?? window.innerHeight;
+        const scale = Math.max(vw / DESIGN_WIDTH, vh / DESIGN_HEIGHT);
 
         this.canvas.width = DESIGN_WIDTH;
         this.canvas.height = DESIGN_HEIGHT;

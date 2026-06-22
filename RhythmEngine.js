@@ -4,6 +4,7 @@ import { Midi } from '@tonejs/midi';
 export const LANE_COUNT = 14;
 export const GAME_BPM = 96;
 export const BEAT_SEC = 60 / GAME_BPM;
+export const MAX_SFX_SEC = 2;
 
 export function simplifyNotesForGameplay(rawNotes, options = {}) {
     const {
@@ -65,34 +66,37 @@ export class RhythmEngine {
         this.synth = null;
         this.panner = null;
         this.musicFilter = null;
+        this.musicGain = null;
         this.songVolume = 0.75;
         this.bpm = GAME_BPM;
     }
 
     setSongVolume(volume) {
         this.songVolume = Math.max(0, Math.min(1, volume));
-        if (!this.synth) return;
-        this.synth.volume.value = this.songVolume <= 0
-            ? -Infinity
-            : Tone.gainToDb(this.songVolume);
+        if (this.musicGain) {
+            this.musicGain.gain.value = this.songVolume;
+        }
     }
 
     async initAudio() {
         if (this.synth) return;
         await Tone.start();
+        await Tone.getContext().resume();
+
+        this.musicGain = new Tone.Gain(this.songVolume);
         this.panner = new Tone.Panner(0);
         this.musicFilter = new Tone.Filter({
             type: 'lowpass',
-            frequency: 1600,
-            rolloff: -24,
-            Q: 0.6
+            frequency: 2400,
+            rolloff: -12,
+            Q: 0.5
         });
         this.synth = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: 'sine' },
-            envelope: { attack: 0.06, decay: 0.28, sustain: 0.35, release: 0.55 },
-            volume: -8
+            oscillator: { type: 'triangle' },
+            envelope: { attack: 0.02, decay: 0.2, sustain: 0.45, release: 0.35 }
         }).connect(this.musicFilter);
-        this.musicFilter.connect(this.panner);
+        this.musicFilter.connect(this.musicGain);
+        this.musicGain.connect(this.panner);
         this.setSongVolume(this.songVolume);
     }
 
@@ -211,10 +215,10 @@ export class RhythmEngine {
             const pitch = note.name || 'C4';
             const raw = note.velocity != null ? note.velocity : 0.7;
             const baseVel = raw > 1 ? raw / 127 : raw;
-            const vel = Math.min(0.55, baseVel * this.songVolume * 0.7);
+            const vel = Math.min(0.9, baseVel * 0.85);
             this.synth.triggerAttackRelease(
                 pitch,
-                Math.min(note.duration || 0.3, 0.32),
+                Math.min(note.duration || 0.35, 0.45),
                 undefined,
                 vel
             );
