@@ -361,14 +361,14 @@ class Game {
                 const btn = div.querySelector('.load-btn');
                 btn.onclick = () => {
                     btn.innerText = 'LOADING...';
-                    document.getElementById('midi-status').innerText = `Loading: ${song.title}...`;
-                    document.getElementById('midi-status').style.color = '#ffff66';
+                    document.getElementById('song-status').innerText = `Ładowanie: ${song.title}...`;
+                    document.getElementById('song-status').style.color = '#ffff66';
 
                     this.showLoadingProgress(() => {
                         const songData = generateSongNotes(song.title);
                         this.engine.loadGeneratedSong(songData);
-                        document.getElementById('midi-status').innerText = `Loaded: ${song.title}`;
-                        document.getElementById('midi-status').style.color = '#00ffff';
+                        document.getElementById('song-status').innerText = `Załadowano: ${song.title}`;
+                        document.getElementById('song-status').style.color = '#00ffff';
                         Array.from(libraryContainer.children).forEach(c => c.style.background = 'rgba(255,255,255,0.05)');
                         div.style.background = 'rgba(255,105,180,0.3)';
                         btn.innerText = 'SELECTED';
@@ -379,28 +379,29 @@ class Game {
             });
         }
 
-        document.getElementById('midi-upload').onchange = async (e) => {
+        document.getElementById('mp3-upload').onchange = async (e) => {
             const file = e.target.files[0];
-            if (file) {
-                document.getElementById('midi-status').innerText = `Loading: ${file.name}...`;
-                document.getElementById('midi-status').style.color = '#ffff66';
-                this.showLoadingProgress(async () => {
-                    try {
-                        await this.engine.loadMidi(file);
-                        document.getElementById('midi-status').innerText = `Loaded: ${file.name}`;
-                        document.getElementById('midi-status').style.color = '#00ffff';
-                    } catch (err) {
-                        document.getElementById('midi-status').innerText = 'Error reading file';
-                        document.getElementById('midi-status').style.color = '#ff4444';
-                        console.error('Failed to parse MIDI file:', err);
-                    }
-                });
-            }
+            if (!file) return;
+
+            document.getElementById('song-status').innerText = `Ładowanie: ${file.name}...`;
+            document.getElementById('song-status').style.color = '#ffff66';
+            this.showLoadingProgress(async () => {
+                try {
+                    await this.engine.loadMp3(file);
+                    document.getElementById('song-status').innerText = `Załadowano: ${file.name}`;
+                    document.getElementById('song-status').style.color = '#00ffff';
+                } catch (err) {
+                    document.getElementById('song-status').innerText = 'Błąd wczytywania MP3';
+                    document.getElementById('song-status').style.color = '#ff4444';
+                    console.error('Failed to load MP3:', err);
+                }
+            });
+            e.target.value = '';
         };
 
         document.getElementById('start-game').onclick = async () => {
             const errorEl = document.getElementById('error-message');
-            if (!this.engine.midiData) {
+            if (!this.engine.songMeta) {
                 if (errorEl) {
                     errorEl.style.display = 'block';
                     setTimeout(() => { errorEl.style.display = 'none'; }, 3000);

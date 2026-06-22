@@ -1,10 +1,39 @@
 import * as Tone from 'tone';
-import { Midi } from '@tonejs/midi';
 
 export const LANE_COUNT = 14;
 export const GAME_BPM = 96;
 export const BEAT_SEC = 60 / GAME_BPM;
 export const MAX_SFX_SEC = 2;
+
+function midiToName(midi) {
+    const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const octave = Math.floor(midi / 12) - 1;
+    return names[midi % 12] + octave;
+}
+
+export function generateBeatNotes(totalDuration, bpm = GAME_BPM, maxNotes = 55) {
+    const beatSec = 60 / bpm;
+    const end = Math.max(beatSec * 4, totalDuration - 0.5);
+    const notes = [];
+    let time = beatSec * 2;
+    let step = 0;
+
+    while (time < end && notes.length < maxNotes) {
+        const midi = 60 + (step % 7) * 2;
+        notes.push({
+            time,
+            duration: beatSec * 0.75,
+            midi,
+            name: midiToName(midi),
+            velocity: 0.75,
+            hit: false
+        });
+        time += beatSec;
+        step++;
+    }
+
+    return notes;
+}
 
 export function simplifyNotesForGameplay(rawNotes, options = {}) {
     const {
@@ -38,26 +67,9 @@ export function simplifyNotesForGameplay(rawNotes, options = {}) {
     return thinned;
 }
 
-function pickMelodyTrack(midiData) {
-    let bestTrack = null;
-    let bestScore = -1;
-
-    for (const track of midiData.tracks) {
-        if (!track.notes.length) continue;
-        const melodic = track.notes.filter(n => n.midi >= 55 && n.midi <= 84).length;
-        const score = melodic * 3 + track.notes.length;
-        if (score > bestScore) {
-            bestScore = score;
-            bestTrack = track;
-        }
-    }
-
-    return bestTrack || midiData.tracks.find(t => t.notes.length) || midiData.tracks[0];
-}
-
 export class RhythmEngine {
     constructor() {
-        this.midiData = null;
+        this.songMeta = null;
         this.notes = [];
         this.startTime = 0;
         this.isPlaying = false;
@@ -67,6 +79,9 @@ export class RhythmEngine {
         this.panner = null;
         this.musicFilter = null;
         this.musicGain = null;
+        this.mp3Player = null;
+        this.mp3ObjectUrl = null;
+        this.useMp3Playback = false;
         this.songVolume = 0.75;
         this.bpm = GAME_BPM;
     }
@@ -106,6 +121,20 @@ export class RhythmEngine {
         else this.panner.toDestination();
     }
 
+    disposeMp3() {
+        if (this.mp3Player) {
+            this.mp3Player.stop();
+            this.mp3Player.disconnect();
+            this.mp3Player.dispose();
+            this.mp3Player = null;
+        }
+        if (this.mp3ObjectUrl) {
+            URL.revokeObjectURL(this.mp3ObjectUrl);
+            this.mp3ObjectUrl = null;
+        }
+        this.useMp3Playback = false;
+    }
+
     assignLanes(notes) {
         return notes.map((n, i) => ({
             ...n,
@@ -118,6 +147,7 @@ export class RhythmEngine {
     }
 
     loadGeneratedSong(songData) {
+        this.disposeMp3();
         this.bpm = songData.bpm || GAME_BPM;
         const simplified = simplifyNotesForGameplay(songData.notes, {
             bpm: this.bpm,
@@ -126,50 +156,46 @@ export class RhythmEngine {
         });
         this.notes = this.assignLanes(simplified).sort((a, b) => a.time - b.time);
         const last = this.notes[this.notes.length - 1];
-        this.midiData = { duration: last ? last.time + 2.5 : songData.duration };
+        const duration = last ? last.time + 2.5 : songData.duration;
+        this.songMeta = { duration, title: songData.title, source: 'generated' };
         return this.notes;
     }
 
-    async loadMidiFromUrl(url) {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Failed to fetch MIDI');
-        const arrayBuffer = await response.arrayBuffer();
-        return this.loadMidiFromArrayBuffer(arrayBuffer);
-    }
+    async loadMp3(file) {
+        await this.initAudio();
+        this.disposeMp3();
 
-    async loadMidi(file) {
-        const arrayBuffer = await file.arrayBuffer();
-        return this.loadMidiFromArrayBuffer(arrayBuffer);
-    }
+        const url = URL.createObjectURL(file);
+        this.mp3ObjectUrl = url;
 
-    async loadMidiFromArrayBuffer(arrayBuffer) {
-        this.midiData = new Midi(arrayBuffer);
-        this.bpm = this.midiData.header.tempos[0]?.bpm || GAME_BPM;
-
-        const melodyTrack = pickMelodyTrack(this.midiData);
-        const rawNotes = (melodyTrack?.notes || []).flatMap(note => {
-            if (note.velocity <= 0) return [];
-            return [{
-                time: note.time,
-                duration: note.duration,
-                name: note.name,
-                midi: note.midi,
-                velocity: note.velocity,
-                hit: false
-            }];
+        await new Promise((resolve, reject) => {
+            this.mp3Player = new Tone.Player({
+                url,
+                onload: resolve,
+                onerror: () => reject(new Error('Failed to load MP3'))
+            }).connect(this.musicGain);
         });
 
+        const duration = this.mp3Player.buffer.duration;
+        if (!duration || duration <= 0) {
+            this.disposeMp3();
+            throw new Error('Invalid MP3 duration');
+        }
+
+        this.bpm = GAME_BPM;
+        const rawNotes = generateBeatNotes(duration, this.bpm);
         const simplified = simplifyNotesForGameplay(rawNotes, {
             bpm: this.bpm,
             minGapBeats: 1,
-            maxNotes: 60
+            maxNotes: 55
         });
         this.notes = this.assignLanes(simplified).sort((a, b) => a.time - b.time);
-
-        if (!this.midiData.duration && this.notes.length) {
-            const last = this.notes[this.notes.length - 1];
-            this.midiData.duration = last.time + last.duration + 1;
-        }
+        this.useMp3Playback = true;
+        this.songMeta = {
+            duration,
+            title: file.name.replace(/\.mp3$/i, ''),
+            source: 'mp3'
+        };
 
         return this.notes;
     }
@@ -178,18 +204,24 @@ export class RhythmEngine {
         this.startTime = performance.now();
         this.isPlaying = true;
         this.notes.forEach(n => { n.hit = false; n._played = false; });
+
+        if (this.mp3Player?.loaded) {
+            this.mp3Player.stop();
+            this.mp3Player.start();
+        }
     }
 
     stop() {
         this.isPlaying = false;
         if (this.synth) this.synth.releaseAll();
+        if (this.mp3Player?.loaded) this.mp3Player.stop();
     }
 
     update(currentTime) {
-        if (!this.isPlaying || !this.midiData) return 0;
+        if (!this.isPlaying || !this.songMeta) return 0;
 
         const elapsedTime = (currentTime - this.startTime) / 1000;
-        const totalDuration = this.midiData.duration;
+        const totalDuration = this.songMeta.duration;
 
         this.playDueNotes(elapsedTime);
 
@@ -199,6 +231,7 @@ export class RhythmEngine {
 
         if (elapsedTime >= totalDuration) {
             this.isPlaying = false;
+            if (this.mp3Player?.loaded) this.mp3Player.stop();
             if (this.onComplete) this.onComplete();
         }
 
@@ -206,7 +239,7 @@ export class RhythmEngine {
     }
 
     playDueNotes(elapsedTime) {
-        if (!this.synth || this.songVolume <= 0) return;
+        if (this.useMp3Playback || !this.synth || this.songVolume <= 0) return;
 
         for (const note of this.notes) {
             if (note._played || elapsedTime < note.time) continue;

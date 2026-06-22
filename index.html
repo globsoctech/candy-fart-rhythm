@@ -11,7 +11,6 @@
       {
         "imports": {
           "@instantdb/core": "https://esm.sh/@instantdb/core@0.22.155",
-          "@tonejs/midi": "https://esm.sh/@tonejs/midi@2.0.28",
           "tone": "https://esm.sh/tone@15.0.4"
         }
       }
@@ -156,9 +155,9 @@
             <div class="lobby-card">
               <h3 class="card-title">2. Pick a Song</h3>
               <div style="margin-bottom: 12px; text-align: center;">
-                <input type="file" id="midi-upload" accept=".mid,.midi" style="display: none;">
-                <label for="midi-upload" style="background: #ff69b4; padding: 8px 18px; border-radius: 20px; cursor: pointer; font-weight: bold; border: 3px solid white; display: inline-block; font-size: 0.9rem;">UPLOAD YOUR MIDI</label>
-                <p id="midi-status" style="margin: 10px 0 0; font-size: 0.85rem; opacity: 0.85;">No song selected</p>
+                <input type="file" id="mp3-upload" accept="audio/mpeg,audio/mp3,.mp3" style="display: none;">
+                <label for="mp3-upload" style="background: #ff69b4; padding: 8px 18px; border-radius: 20px; cursor: pointer; font-weight: bold; border: 3px solid white; display: inline-block; font-size: 0.9rem;">WGRAJ SWÓJ MP3</label>
+                <p id="song-status" style="margin: 10px 0 0; font-size: 0.85rem; opacity: 0.85;">Nie wybrano utworu</p>
                 <div id="load-progress-wrap" style="display: none; width: 100%; height: 14px; background: rgba(0,0,0,0.4); border-radius: 10px; border: 2px solid rgba(255,255,255,0.3); overflow: hidden; margin-top: 8px;">
                   <div id="load-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff69b4, #00ffff); transition: width 0.1s linear;"></div>
                 </div>
@@ -216,7 +215,7 @@
           </div>
 
           <button id="start-game" style="margin-top: 24px; background: #00ffff; color: #000; padding: 16px 50px; border: none; border-radius: 30px; font-size: 1.6rem; font-weight: bold; cursor: pointer; font-family: Orbitron; border: 4px solid white; box-shadow: 0 0 24px rgba(0,255,255,0.5);">START PARTY</button>
-          <p id="error-message" style="color: #ff4444; margin-top: 10px; font-weight: bold; display: none;">Please select a song first!</p>
+          <p id="error-message" style="color: #ff4444; margin-top: 10px; font-weight: bold; display: none;">Najpierw wybierz utwór!</p>
           <p style="margin-top: 12px; font-size: 0.85rem; opacity: 0.6;">Sterowanie: <strong>SPACJA</strong> lub dotyk na ekranie</p>
         </div>
 
